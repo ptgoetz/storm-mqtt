@@ -24,6 +24,7 @@ public class MqttSpout implements IRichSpout, MqttCallback {
     protected transient TopologyContext context;
     protected transient LinkedBlockingQueue<TopicMessage> incoming;
     protected transient HashMap<Integer, TopicMessage> pending;
+    private transient Map conf;
     protected MqttType type;
 
 
@@ -31,62 +32,44 @@ public class MqttSpout implements IRichSpout, MqttCallback {
         this.type = type;
     }
 
-
-    /**
-     * Declare the output schema for all the streams of this topology.
-     *
-     * @param declarer this is used to declare output stream ids, output fields, and whether or not each output stream is a direct stream
-     */
     public void declareOutputFields(OutputFieldsDeclarer declarer) {
         declarer.declare(this.type.outputFields());
     }
 
-    /**
-     * Declare configuration specific to this component. Only a subset of the "topology.*" configs can
-     * be overridden. The component configuration can be further overridden when constructing the
-     * topology using {@link TopologyBuilder}
-     */
     public Map<String, Object> getComponentConfiguration() {
         return null;
     }
 
-    /**
-     * Called when a task for this component is initialized within a worker on the cluster.
-     * It provides the spout with the environment in which the spout executes.
-     * <p/>
-     * <p>This includes the:</p>
-     *
-     * @param conf      The Storm configuration for this spout. This is the configuration provided to the topology merged in with cluster configuration on this machine.
-     * @param context   This object can be used to get information about this task's place within the topology, including the task id and component id of this task, input and output information, etc.
-     * @param collector The collector is used to emit tuples from this spout. Tuples can be emitted at any time, including the open and close methods. The collector is thread-safe and should be saved as an instance variable of this spout object.
-     */
     public void open(Map conf, TopologyContext context, SpoutOutputCollector collector) {
         this.collector = collector;
         this.context = context;
+        this.conf = conf;
+
         this.incoming = new LinkedBlockingQueue<TopicMessage>();
         this.pending = new HashMap<Integer, TopicMessage>();
 
+        connectMqtt();
+
+    }
+
+    private void connectMqtt(){
         String url = (String)conf.get(MQTT_URL);
         String topic = (String)conf.get(MQTT_TOPIC);
         try {
             this.mqttClient = new MqttClient(url, topic, new MemoryPersistence());
             this.mqttClient.setCallback(this);
 
-            this.mqttClient.connect();
+            MqttConnectOptions options = new MqttConnectOptions();
+            options.setWill("/lastWill", "I died.".getBytes(), 0, false);
+
+
+            this.mqttClient.connect(options);
             this.mqttClient.subscribe((String) conf.get(MQTT_TOPIC));
         } catch (MqttException e) {
             throw new RuntimeException(e);
         }
-
     }
 
-    /**
-     * Called when an ISpout is going to be shutdown. There is no guarentee that close
-     * will be called, because the supervisor kill -9's worker processes on the cluster.
-     * <p/>
-     * <p>The one context where close is guaranteed to be called is a topology is
-     * killed when running Storm in local mode.</p>
-     */
     public void close() {
         try {
             this.mqttClient.disconnect();
@@ -97,20 +80,10 @@ public class MqttSpout implements IRichSpout, MqttCallback {
 
     }
 
-    /**
-     * Called when a spout has been activated out of a deactivated mode.
-     * nextTuple will be called on this spout soon. A spout can become activated
-     * after having been deactivated when the topology is manipulated using the
-     * `storm` client.
-     */
     public void activate() {
 
     }
 
-    /**
-     * Called when a spout has been deactivated. nextTuple will not be called while
-     * a spout is deactivated. The spout may or may not be reactivated in the future.
-     */
     public void deactivate() {
 
     }
@@ -166,8 +139,8 @@ public class MqttSpout implements IRichSpout, MqttCallback {
      * @param cause the reason behind the loss of connection.
      */
     public void connectionLost(Throwable cause) {
-        // todo Attempt reconnect...
         LOG.warn("MQTT Connection loss.", cause);
+        connectMqtt();
     }
 
     /**

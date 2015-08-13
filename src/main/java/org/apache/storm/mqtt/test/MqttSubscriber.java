@@ -35,12 +35,12 @@ public class MqttSubscriber {
             client.setCallback(callback);
 
             client.connect();
-            client.subscribe("/feeds/photocell");
-            try {
-                Thread.sleep(120 * 1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            client.subscribe("/#");
+//            try {
+//                Thread.sleep(120 * 1000);
+//            } catch (InterruptedException e) {
+//                e.printStackTrace();
+//            }
 
 //            client.disconnect();
         } catch (MqttException e) {

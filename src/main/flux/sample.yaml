@@ -22,14 +22,16 @@ name: "mqtt-topology"
 
 components:
   - id: "mqtt-type"
-    className: "org.apache.storm.mqtt.types.StringType"
+    className: "org.apache.storm.mqtt.test.CustomType"
+#    constructorArgs:
+#      - 2
 
 
 # topology configuration
 config:
   topology.workers: 1
   org.apache.storm.mqtt.url: "tcp://raspberrypi.local:1883"
-  org.apache.storm.mqtt.topic: "/feeds/photocell"
+  org.apache.storm.mqtt.topic: "/users/tgoetz/#"
 
 # spout definitions
 spouts:
