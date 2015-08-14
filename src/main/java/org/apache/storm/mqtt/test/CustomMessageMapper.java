@@ -2,8 +2,8 @@ package org.apache.storm.mqtt.test;
 
 import backtype.storm.tuple.Fields;
 import backtype.storm.tuple.Values;
-import org.apache.storm.mqtt.MqttType;
-import org.apache.storm.mqtt.TopicMessage;
+import org.apache.storm.mqtt.MQTTMessageMapper;
+import org.apache.storm.mqtt.MQTTMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,11 +13,11 @@ import org.slf4j.LoggerFactory;
  * emits a tuple containing user(String), deviceId(String), location(String), temperature(float), humidity(float)
  *
  */
-public class CustomType implements MqttType {
-    private static final Logger LOG = LoggerFactory.getLogger(CustomType.class);
+public class CustomMessageMapper implements MQTTMessageMapper {
+    private static final Logger LOG = LoggerFactory.getLogger(CustomMessageMapper.class);
 
 
-    public Values toValues(TopicMessage message) {
+    public Values toValues(MQTTMessage message) {
         String topic = message.getTopic();
         String[] topicElements = topic.split("/");
         String[] payloadElements = new String(message.getMessage()).split("/");

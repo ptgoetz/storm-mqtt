@@ -1,35 +1,57 @@
 package org.apache.storm.mqtt;
 
+import backtype.storm.Config;
 import backtype.storm.spout.SpoutOutputCollector;
 import backtype.storm.task.TopologyContext;
 import backtype.storm.topology.IRichSpout;
 import backtype.storm.topology.OutputFieldsDeclarer;
-import org.eclipse.paho.client.mqttv3.*;
-import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
+import org.fusesource.hawtbuf.Buffer;
+import org.fusesource.hawtbuf.UTF8Buffer;
+import org.fusesource.mqtt.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
 
-public class MqttSpout implements IRichSpout, MqttCallback {
-    private static final Logger LOG = LoggerFactory.getLogger(MqttSpout.class);
+public class MQTTSpout implements IRichSpout, Listener {
+    private static final Logger LOG = LoggerFactory.getLogger(MQTTSpout.class);
     public static final String MQTT_URL = "org.apache.storm.mqtt.url";
     public static final String MQTT_TOPIC = "org.apache.storm.mqtt.topic";
 
-    private transient MqttClient mqttClient;
+    private String topologyName;
+
+
+    private CallbackConnection connection;
 
     protected transient SpoutOutputCollector collector;
     protected transient TopologyContext context;
-    protected transient LinkedBlockingQueue<TopicMessage> incoming;
-    protected transient HashMap<Integer, TopicMessage> pending;
+    protected transient LinkedBlockingQueue<MQTTMessage> incoming;
+    protected transient HashMap<Long, MQTTMessage> pending;
     private transient Map conf;
-    protected MqttType type;
+    protected MQTTMessageMapper type;
+    protected MQTTOptions options;
+
+    private boolean mqttConnected = false;
+    private boolean mqttConnectFailed = false;
 
 
-    public MqttSpout(MqttType type){
+    private Long sequence = Long.MIN_VALUE;
+
+    private Long nextId(){
+        this.sequence++;
+        if(this.sequence == Long.MAX_VALUE){
+            this.sequence = Long.MIN_VALUE;
+        }
+        return this.sequence;
+    }
+
+
+    public MQTTSpout(MQTTMessageMapper type, MQTTOptions options){
         this.type = type;
+        this.options = options;
     }
 
     public void declareOutputFields(OutputFieldsDeclarer declarer) {
@@ -41,43 +63,99 @@ public class MqttSpout implements IRichSpout, MqttCallback {
     }
 
     public void open(Map conf, TopologyContext context, SpoutOutputCollector collector) {
+        this.topologyName = (String)conf.get(Config.TOPOLOGY_NAME);
+
         this.collector = collector;
         this.context = context;
         this.conf = conf;
 
-        this.incoming = new LinkedBlockingQueue<TopicMessage>();
-        this.pending = new HashMap<Integer, TopicMessage>();
+        this.incoming = new LinkedBlockingQueue<MQTTMessage>();
+        this.pending = new HashMap<Long, MQTTMessage>();
 
-        connectMqtt();
-
-    }
-
-    private void connectMqtt(){
-        String url = (String)conf.get(MQTT_URL);
-        String topic = (String)conf.get(MQTT_TOPIC);
         try {
-            this.mqttClient = new MqttClient(url, topic, new MemoryPersistence());
-            this.mqttClient.setCallback(this);
-
-            MqttConnectOptions options = new MqttConnectOptions();
-            options.setWill("/lastWill", "I died.".getBytes(), 0, false);
-
-
-            this.mqttClient.connect(options);
-            this.mqttClient.subscribe((String) conf.get(MQTT_TOPIC));
-        } catch (MqttException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public void close() {
-        try {
-            this.mqttClient.disconnect();
-            this.mqttClient.close();
-        } catch (MqttException e) {
+            connectMqtt();
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
+    }
+
+    private void connectMqtt() throws Exception {
+        MQTT client = new MQTT();
+        client.setHost(this.options.getHost(), this.options.getPort());
+        client.setClientId(this.topologyName + "-" + this.context.getThisComponentId() + "-" + this.context.getThisTaskId());
+        LOG.info("MQTT ClientID: " + client.getClientId().toString());
+        client.setCleanSession(this.options.isCleanConnection());
+
+        client.setReconnectDelay(this.options.getReconnectDelay());
+        client.setReconnectDelayMax(this.options.getReconnectDelayMax());
+        client.setReconnectBackOffMultiplier(this.options.getReconnectBackOffMultiplier());
+        client.setConnectAttemptsMax(this.options.getConnectAttemptsMax());
+        client.setReconnectAttemptsMax(this.options.getReconnectAttemptsMax());
+
+
+        client.setUserName(this.options.getUserName());
+        client.setPassword(this.options.getPassword());
+        client.setTracer(new MQTTLogger());
+
+        if(this.options.getWillTopic() != null && this.options.getWillPayload() != null){
+            client.setWillTopic(this.options.getWillTopic());
+            client.setWillMessage(this.options.getWillPayload());
+            client.setWillRetain(this.options.getWillRetain());
+            QoS qos = null;
+            switch(this.options.getWillQos()) {
+                case 0:
+                    qos = QoS.AT_MOST_ONCE;
+                    break;
+                case 1:
+                    qos = QoS.AT_LEAST_ONCE;
+                    break;
+                case 2:
+                    qos = QoS.EXACTLY_ONCE;
+                    break;
+            }
+            client.setWillQos(qos);
+        }
+
+        this.connection = client.callbackConnection();
+        this.connection.listener(this);
+        this.connection.connect(new ConnectCallback());
+
+
+        while(this.mqttConnected == false && this.mqttConnectFailed == false){
+            LOG.info("Waiting for connection...");
+            Thread.sleep(500);
+        }
+
+        LOG.info("MQTT Connect success --> " + this.mqttConnected);
+        LOG.info("MQTT Connect failed --> " + this.mqttConnectFailed);
+
+        if(this.mqttConnected){
+            List<String> topicList = this.options.getTopics();
+            Topic[] topics = new Topic[topicList.size()];
+            QoS qos = null;
+            switch(this.options.getQos()) {
+                case 0:
+                    qos = QoS.AT_MOST_ONCE;
+                    break;
+                case 1:
+                    qos = QoS.AT_LEAST_ONCE;
+                    break;
+                case 2:
+                    qos = QoS.EXACTLY_ONCE;
+                    break;
+            }
+            for(int i = 0;i < topicList.size();i++){
+                topics[i] = new Topic(topicList.get(i), qos);
+            }
+            connection.subscribe(topics, new SubscribeCallback());
+        }
+    }
+
+
+
+    public void close() {
+        this.connection.disconnect(new DisconnectCallback());
     }
 
     public void activate() {
@@ -97,11 +175,15 @@ public class MqttSpout implements IRichSpout, MqttCallback {
      * so as not to waste too much CPU.
      */
     public void nextTuple() {
-        TopicMessage tm = this.incoming.poll();
+        MQTTMessage tm = this.incoming.poll();
         if(tm != null){
-            this.collector.emit(this.type.toValues(tm), tm.hashCode());
-            this.pending.put(tm.hashCode(), tm);
+            Long id = nextId();
+            this.collector.emit(this.type.toValues(tm), id);
+            this.pending.put(id, tm);
+        } else {
+            Thread.yield();
         }
+
     }
 
     /**
@@ -112,7 +194,8 @@ public class MqttSpout implements IRichSpout, MqttCallback {
      * @param msgId
      */
     public void ack(Object msgId) {
-        this.pending.remove(msgId);
+        MQTTMessage msg = this.pending.remove(msgId);
+        this.connection.getDispatchQueue().execute(msg.ack());
     }
 
     /**
@@ -126,69 +209,70 @@ public class MqttSpout implements IRichSpout, MqttCallback {
         try {
             this.incoming.put(this.pending.remove(msgId));
         } catch (InterruptedException e) {
-            LOG.warn("Interrupted while re-queueing a value.", e);
+            LOG.warn("Interrupted while re-queueing message.", e);
         }
 
     }
 
-    /* ############ MqttCallback implementation ############ */
 
-    /**
-     * This method is called when the connection to the server is lost.
-     *
-     * @param cause the reason behind the loss of connection.
-     */
-    public void connectionLost(Throwable cause) {
-        LOG.warn("MQTT Connection loss.", cause);
-        connectMqtt();
+    // ################# Listener Implementation ######################
+    public void onConnected() {
+        // this gets called repeatedly for no apparent reason, don't do anything
     }
 
-    /**
-     * This method is called when a message arrives from the server.
-     * <p/>
-     * <p>
-     * This method is invoked synchronously by the MQTT client. An
-     * acknowledgment is not sent back to the server until this
-     * method returns cleanly.</p>
-     * <p>
-     * If an implementation of this method throws an <code>Exception</code>, then the
-     * client will be shut down.  When the client is next re-connected, any QoS
-     * 1 or 2 messages will be redelivered by the server.</p>
-     * <p>
-     * Any additional messages which arrive while an
-     * implementation of this method is running, will build up in memory, and
-     * will then back up on the network.</p>
-     * <p>
-     * If an application needs to persist data, then it
-     * should ensure the data is persisted prior to returning from this method, as
-     * after returning from this method, the message is considered to have been
-     * delivered, and will not be reproducible.</p>
-     * <p>
-     * It is possible to send a new message within an implementation of this callback
-     * (for example, a response to this message), but the implementation must not
-     * disconnect the client, as it will be impossible to send an acknowledgment for
-     * the message being processed, and a deadlock will occur.</p>
-     *
-     * @param topic   name of the topic on the message was published to
-     * @param message the actual message.
-     * @throws Exception if a terminal error has occurred, and the client should be
-     *                   shut down.
-     */
-    public void messageArrived(String topic, MqttMessage message) throws Exception {
-        this.incoming.put(new TopicMessage(topic, message.getPayload()));
+    public void onDisconnected() {
+        // this gets called repeatedly for no apparent reason, don't do anything
     }
 
-    /**
-     * Called when delivery for a message has been completed, and all
-     * acknowledgments have been received. For QoS 0 messages it is
-     * called once the message has been handed to the network for
-     * delivery. For QoS 1 it is called when PUBACK is received and
-     * for QoS 2 when PUBCOMP is received. The token will be the same
-     * token as that returned when the message was published.
-     *
-     * @param token the delivery token associated with the message.
-     */
-    public void deliveryComplete(IMqttDeliveryToken token) {
-
+    public void onPublish(UTF8Buffer topic, Buffer payload, Runnable ack) {
+        LOG.debug("Received message: topic={}, payload={}", topic.toString(), new String(payload.toByteArray()));
+        try {
+            this.incoming.put(new MQTTMessage(topic.toString(), payload.toByteArray(), ack));
+        } catch (InterruptedException e) {
+            LOG.warn("Interrupted while queueing an MQTT message.");
+        }
     }
+
+    public void onFailure(Throwable throwable) {
+        LOG.error("MQTT Connection Failure.", throwable);
+        MQTTSpout.this.connection.disconnect(new DisconnectCallback());
+        throw new RuntimeException("MQTT Connection failure.", throwable);
+    }
+
+    // ################# Connect Callback Implementation ######################
+    private class ConnectCallback implements Callback<Void> {
+        public void onSuccess(Void v) {
+            LOG.info("MQTT Connected. Subscribing to topic...");
+            MQTTSpout.this.mqttConnected = true;
+        }
+
+        public void onFailure(Throwable throwable) {
+            LOG.info("MQTT Connection failed.");
+            MQTTSpout.this.mqttConnectFailed = true;
+        }
+    }
+
+    // ################# Subscribe Callback Implementation ######################
+    private class SubscribeCallback implements Callback<byte[]>{
+        public void onSuccess(byte[] qos) {
+            LOG.info("Subscripton sucessful.");
+        }
+
+        public void onFailure(Throwable throwable) {
+            LOG.error("MQTT Subscripton failed.", throwable);
+            throw new RuntimeException("MQTT Subscribe failed.", throwable);
+        }
+    }
+
+    // ################# Subscribe Callback Implementation ######################
+    private class DisconnectCallback implements Callback<Void>{
+        public void onSuccess(Void aVoid) {
+            LOG.info("MQTT Disconnect successful.");
+        }
+
+        public void onFailure(Throwable throwable) {
+            // Disconnects don't fail.
+        }
+    }
+
 }

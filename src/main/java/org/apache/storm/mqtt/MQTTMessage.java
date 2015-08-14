@@ -3,13 +3,15 @@ package org.apache.storm.mqtt;
 import org.apache.storm.commons.lang.builder.EqualsBuilder;
 import org.apache.storm.commons.lang.builder.HashCodeBuilder;
 
-public class TopicMessage {
+public class MQTTMessage {
     private String topic;
     private byte[] message;
+    private Runnable ack;
 
-    TopicMessage(String topic, byte[] message){
+    MQTTMessage(String topic, byte[] message, Runnable ack){
         this.topic = topic;
         this.message = message;
+        this.ack = ack;
     }
 
     public byte[] getMessage(){
@@ -37,11 +39,15 @@ public class TopicMessage {
         if (obj.getClass() != getClass()) {
             return false;
         }
-        TopicMessage tm = (TopicMessage)obj;
+        MQTTMessage tm = (MQTTMessage)obj;
         return new EqualsBuilder()
                 .appendSuper(super.equals(obj))
                 .append(this.topic, tm.topic)
                 .append(this.message, tm.message)
                 .isEquals();
+    }
+
+    Runnable ack(){
+        return this.ack;
     }
 }

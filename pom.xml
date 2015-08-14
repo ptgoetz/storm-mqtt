@@ -33,10 +33,15 @@
       <artifactId>flux-core</artifactId>
       <version>0.10.0-beta1</version>
     </dependency>
+    <!--<dependency>-->
+      <!--<artifactId>org.eclipse.paho.client.mqttv3</artifactId>-->
+      <!--<groupId>org.eclipse.paho</groupId>-->
+      <!--<version>1.0.2</version>-->
+    <!--</dependency>-->
     <dependency>
-      <artifactId>org.eclipse.paho.client.mqttv3</artifactId>
-      <groupId>org.eclipse.paho</groupId>
-      <version>1.0.2</version>
+      <groupId>org.fusesource.mqtt-client</groupId>
+      <artifactId>mqtt-client</artifactId>
+      <version>1.10</version>
     </dependency>
     <dependency>
       <groupId>junit</groupId>
@@ -44,9 +49,45 @@
       <version>3.8.1</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.apache.storm</groupId>
+      <artifactId>storm-hdfs</artifactId>
+      <version>0.10.0-beta1</version>
+      <exclusions>
+        <exclusion>
+          <groupId>commons-beanutils</groupId>
+          <artifactId>commons-beanutils-core</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>commons-beanutils</groupId>
+          <artifactId>commons-beanutils</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-yarn-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>javax.servlet</groupId>
+          <artifactId>servlet-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>javax.servlet</groupId>
+          <artifactId>javax.servlet-api</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <source>1.7</source>
+          <target>1.7</target>
+        </configuration>
+      </plugin>
+
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>

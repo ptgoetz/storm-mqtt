@@ -1,7 +1,6 @@
 package org.apache.storm.mqtt.test;
 
-import org.eclipse.paho.client.mqttv3.*;
-import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
+import org.fusesource.mqtt.client.*;
 
 /**
  * Created by tgoetz on 8/4/15.
@@ -9,43 +8,28 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 public class MqttSubscriber {
 
 
-    public static void main(String[] args) {
-        try {
-            MqttClient client = new MqttClient("tcp://raspberrypi.local:1883", "pahomqttpublish1", new MemoryPersistence());
-            MqttCallback callback = new MqttCallback() {
-                public void connectionLost(Throwable cause) {
-                    System.out.println("Connection lost.");
-                    cause.printStackTrace();
-                }
+    public static void main(String[] args) throws Exception {
 
-                public void messageArrived(String topic, MqttMessage message) throws Exception {
-                    System.out.println("Message arrived on topic: " + topic);
-                    System.out.println(new String(message.getPayload()));
-                }
+        MQTT client = new MQTT();
+        client.setHost("tcp://raspberrypi.local:1883");
+        client.setClientId("fusesourcesubscriber");
+        client.setCleanSession(false);
+        BlockingConnection connection = client.blockingConnection();
+        connection.connect();
 
-                public void deliveryComplete(IMqttDeliveryToken token) {
-                    try {
-                        System.out.println("Delivery complete. " + token.getMessage().toString());
-                    } catch (Exception e){
-                        e.printStackTrace();
-                    }
+        Topic[] topics = {new Topic("testack", QoS.AT_LEAST_ONCE)};
+        byte[] qoses = connection.subscribe(topics);
+        //System.out.println(new String(qoses));
 
-                }
-            };
-            client.setCallback(callback);
-
-            client.connect();
-            client.subscribe("/#");
-//            try {
-//                Thread.sleep(120 * 1000);
-//            } catch (InterruptedException e) {
-//                e.printStackTrace();
-//            }
-
-//            client.disconnect();
-        } catch (MqttException e) {
-            e.printStackTrace();
+        while(true) {
+            Message message = connection.receive();
+            System.out.println("Message recieved on topic: " + message.getTopic());
+            System.out.println("Payload: " + new String(message.getPayload()));
+            message.ack();
         }
+
+        //connection.disconnect();
+
     }
 
 

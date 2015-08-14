@@ -2,8 +2,8 @@ package org.apache.storm.mqtt.test;
 
 import backtype.storm.tuple.Fields;
 import backtype.storm.tuple.Values;
-import org.apache.storm.mqtt.MqttType;
-import org.apache.storm.mqtt.TopicMessage;
+import org.apache.storm.mqtt.MQTTMessageMapper;
+import org.apache.storm.mqtt.MQTTMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,15 +11,15 @@ import org.slf4j.LoggerFactory;
 /**
  *
  */
-public class TopicIndexType implements MqttType {
-    private static final Logger LOG = LoggerFactory.getLogger(TopicIndexType.class);
+public class TopicIndexMessageMapper implements MQTTMessageMapper {
+    private static final Logger LOG = LoggerFactory.getLogger(TopicIndexMessageMapper.class);
     private int pathIndex = 0;
 
-    public TopicIndexType(int index){
+    public TopicIndexMessageMapper(int index){
         this.pathIndex = index;
     }
 
-    public Values toValues(TopicMessage message) {
+    public Values toValues(MQTTMessage message) {
         String topic = message.getTopic();
         String[] pathElements = topic.split("/");
         if(this.pathIndex > pathElements.length){
@@ -27,7 +27,7 @@ public class TopicIndexType implements MqttType {
             return new Values(null, topic,  new String(message.getMessage()));
 
         } else {
-            LOG.info("Path: {}", pathElements);
+            LOG.info("Path: {}", (Object[])pathElements);
             return new Values(pathElements[this.pathIndex], topic,  new String(message.getMessage()));
         }
     }
