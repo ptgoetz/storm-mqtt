@@ -1,4 +1,4 @@
-package org.apache.storm.mqtt.test;
+package org.apache.storm.mqtt.examples;
 
 import org.fusesource.mqtt.client.*;
 
@@ -17,7 +17,7 @@ public class MqttSubscriber {
         BlockingConnection connection = client.blockingConnection();
         connection.connect();
 
-        Topic[] topics = {new Topic("testack", QoS.AT_LEAST_ONCE)};
+        Topic[] topics = {new Topic("/users/#", QoS.AT_LEAST_ONCE)};
         byte[] qoses = connection.subscribe(topics);
         //System.out.println(new String(qoses));
 

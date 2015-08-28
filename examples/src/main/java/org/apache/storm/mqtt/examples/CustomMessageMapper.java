@@ -1,4 +1,4 @@
-package org.apache.storm.mqtt.test;
+package org.apache.storm.mqtt.examples;
 
 import backtype.storm.tuple.Fields;
 import backtype.storm.tuple.Values;

@@ -1,4 +1,4 @@
-package org.apache.storm.mqtt.test;
+package org.apache.storm.mqtt.examples;
 
 
 import org.fusesource.mqtt.client.BlockingConnection;

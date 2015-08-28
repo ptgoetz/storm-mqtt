@@ -8,7 +8,7 @@ name: "mqtt-topology"
 components:
    ########## MQTT Spout Config ############
   - id: "mqtt-type"
-    className: "org.apache.storm.mqtt.test.CustomMessageMapper"
+    className: "org.apache.storm.mqtt.examples.CustomMessageMapper"
   - id: "mqtt-options"
     className: "org.apache.storm.mqtt.MQTTOptions"
     properties:
