@@ -75,7 +75,8 @@ public class MQTTSpout implements IRichSpout, Listener {
         try {
             connectMqtt();
         } catch (Exception e) {
-            e.printStackTrace();
+            this.collector.reportError(e);
+            throw new RuntimeException("MQTT Connection failed.", e);
         }
 
     }
