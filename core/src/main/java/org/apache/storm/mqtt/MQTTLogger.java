@@ -6,7 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- *
+ * Wrapper around SLF4J logger that allows MQTT messages to be logged.
  */
 public class MQTTLogger extends Tracer {
     private static final Logger LOG = LoggerFactory.getLogger(MQTTLogger.class);

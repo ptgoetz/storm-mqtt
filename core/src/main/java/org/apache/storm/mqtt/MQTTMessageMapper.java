@@ -10,6 +10,18 @@ import java.io.Serializable;
  * given a MQTT Topic Name and a byte array payload.
  */
 public interface MQTTMessageMapper extends Serializable {
+    /**
+     * Convert a MQTTMessage to a set of Values that can be emitted as a Storm Tuple.
+     *
+     * @param message An MQTT Message.
+     * @return Values representing a Storm Tuple.
+     */
     Values toValues(MQTTMessage message);
+
+    /**
+     * Returns the list of output fields this Mapper produces.
+     *
+     * @return the list of output fields this mapper produces.
+     */
     Fields outputFields();
 }

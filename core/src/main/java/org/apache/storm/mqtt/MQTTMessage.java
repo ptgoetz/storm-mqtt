@@ -3,6 +3,11 @@ package org.apache.storm.mqtt;
 import org.apache.storm.commons.lang.builder.EqualsBuilder;
 import org.apache.storm.commons.lang.builder.HashCodeBuilder;
 
+/**
+ * Represents an MQTT Message consisting of a topic string (e.g. "/users/ptgoetz/office/thermostat")
+ * and a byte array message/payload.
+ *
+ */
 public class MQTTMessage {
     private String topic;
     private byte[] message;

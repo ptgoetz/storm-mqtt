@@ -7,8 +7,7 @@ import java.util.List;
  *
  */
 public class MQTTOptions implements Serializable {
-    private String host = "localhost";
-    private int port = 1883;
+    private String url = "tcp://localhost:1883";
     private List<String> topics = null;
     private boolean cleanConnection = false;
 
@@ -28,22 +27,12 @@ public class MQTTOptions implements Serializable {
 
     private int qos = 1;
 
-    public MQTTOptions(){}
-
-    public String getHost() {
-        return host;
+    public String getUrl() {
+        return url;
     }
 
-    public void setHost(String host) {
-        this.host = host;
-    }
-
-    public int getPort() {
-        return port;
-    }
-
-    public void setPort(int port) {
-        this.port = port;
+    public void setUrl(String url) {
+        this.url = url;
     }
 
     public List<String> getTopics() {
@@ -166,15 +155,11 @@ public class MQTTOptions implements Serializable {
     public static class Builder {
         private MQTTOptions options = new MQTTOptions();
 
-        public Builder host(String host) {
-            this.options.host = host;
+        public Builder url(String url) {
+            this.options.url = url;
             return this;
         }
 
-        public Builder port(int port) {
-            this.options.port = port;
-            return this;
-        }
 
         public Builder topics(List<String> topics) {
             this.options.topics = topics;

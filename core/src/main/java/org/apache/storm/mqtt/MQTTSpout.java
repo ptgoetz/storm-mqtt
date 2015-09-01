@@ -5,12 +5,14 @@ import backtype.storm.spout.SpoutOutputCollector;
 import backtype.storm.task.TopologyContext;
 import backtype.storm.topology.IRichSpout;
 import backtype.storm.topology.OutputFieldsDeclarer;
+import org.apache.storm.mqtt.ssl.KeyStoreLoader;
 import org.fusesource.hawtbuf.Buffer;
 import org.fusesource.hawtbuf.UTF8Buffer;
 import org.fusesource.mqtt.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +35,7 @@ public class MQTTSpout implements IRichSpout, Listener {
     private transient Map conf;
     protected MQTTMessageMapper type;
     protected MQTTOptions options;
+    protected KeyStoreLoader keyStoreLoader;
 
     private boolean mqttConnected = false;
     private boolean mqttConnectFailed = false;
@@ -50,8 +53,18 @@ public class MQTTSpout implements IRichSpout, Listener {
 
 
     public MQTTSpout(MQTTMessageMapper type, MQTTOptions options){
+        this(type, options, null);
+    }
+
+    public MQTTSpout(MQTTMessageMapper type, MQTTOptions options, KeyStoreLoader keyStoreLoader){
         this.type = type;
         this.options = options;
+        this.keyStoreLoader = keyStoreLoader;
+        URI uri = URI.create(this.options.getUrl());
+        if(!uri.getScheme().equalsIgnoreCase("tcp") && this.keyStoreLoader == null){
+            throw new IllegalStateException("A TLS/SSL MQTT URL was specified, but no KeyStoreLoader configured. " +
+                    "A KeyStoreLoader implementation is required when using TLS/SSL.");
+        }
     }
 
     public void declareOutputFields(OutputFieldsDeclarer declarer) {
@@ -83,7 +96,12 @@ public class MQTTSpout implements IRichSpout, Listener {
 
     private void connectMqtt() throws Exception {
         MQTT client = new MQTT();
-        client.setHost(this.options.getHost(), this.options.getPort());
+        URI uri = URI.create(this.options.getUrl());
+        if(!uri.getScheme().equalsIgnoreCase("tcp")){
+//            throw new IllegalStateException()
+        }
+
+        client.setHost(uri);
         client.setClientId(this.topologyName + "-" + this.context.getThisComponentId() + "-" + this.context.getThisTaskId());
         LOG.info("MQTT ClientID: " + client.getClientId().toString());
         client.setCleanSession(this.options.isCleanConnection());
